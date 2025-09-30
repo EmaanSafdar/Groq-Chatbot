@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Groq Chatbot</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* ===== Body ===== */
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 30px;
+      color: #333;
+    }
+
+    /* ===== Chat Container ===== */
+    .chat-container {
+      width: 800px;
+      height: 700px;
+      background: #ffffff;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    }
+
+    /* ===== Chat Header ===== */
+    .chat-header {
+      background: #0078ff;
+      padding: 16px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 20px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-header button {
+      background: #ff3b30;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 0.3s;
+    }
+
+    .chat-header button:hover {
+      background: #e13228;
+    }
+
+    /* ===== Chat Box ===== */
+    .chat-box {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background: #f0f0f0;
+      scrollbar-width: thin;
+      scrollbar-color: #ccc #f0f0f0;
+    }
+
+    .chat-box::-webkit-scrollbar {
+      width: 8px;
+    }
+    .chat-box::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 6px;
+    }
+    .chat-box::-webkit-scrollbar-track {
+      background: #f0f0f0;
+    }
+
+    /* ===== Messages ===== */
+    .message {
+      margin: 10px 0;
+      display: flex;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message.bot {
+      justify-content: flex-start;
+    }
+
+    /* ===== Chat Bubble ===== */
+    .bubble {
+      max-width: 70%;
+      padding: 14px 18px;
+      border-radius: 16px;
+      line-height: 1.6;
+      animation: fadeIn 0.3s;
+      white-space: pre-line;
+      font-size: 16px;
+    }
+
+    .user .bubble {
+      background: #0078ff;
+      color: white;
+      border-bottom-right-radius: 0;
+    }
+
+    .bot .bubble {
+      background: #e0e0e0;
+      color: #333;
+      border-bottom-left-radius: 0;
+    }
+
+    /* ===== Typing Indicator ===== */
+    .typing {
+      font-style: italic;
+      font-size: 14px;
+      color: #666;
+      margin: 5px 0;
+    }
+
+    /* ===== Fade-in Animation ===== */
+    @keyframes fadeIn {
+      from {opacity: 0; transform: translateY(5px);}
+      to {opacity: 1; transform: translateY(0);}
+    }
+
+    /* ===== Input Area ===== */
+    .input-area {
+      display: flex;
+      padding: 16px;
+      border-top: 1px solid #ddd;
+      background: #fafafa;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      outline: none;
+      font-size: 16px;
+      transition: 0.2s;
+      background: #fff;
+      color: #333;
+    }
+
+    .input-area input:focus {
+      border-color: #0078ff;
+    }
+
+    .input-area input::placeholder {
+      color: #aaa;
+    }
+
+    .input-area button {
+      margin-left: 12px;
+      padding: 14px 22px;
+      background: #0078ff;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: 0.3s;
+    }
+
+    .input-area button:hover {
+      background: #005fcc;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      🤖 Groq Chatbot
+      <button onclick="resetChat()">⟳ Reset</button>
+    </div>
+    <div class="chat-box" id="chat-box"></div>
+    <div class="input-area">
+      <input type="text" id="user-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter'){sendMessage()}">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("user-input");
+      const chatBox = document.getElementById("chat-box");
+      const userMessage = input.value.trim();
+      if (!userMessage) return;
+
+      addMessage(userMessage, "user");
+      input.value = "";
+
+      const typingEl = document.createElement("div");
+      typingEl.className = "typing";
+      typingEl.innerText = "Bot is typing...";
+      chatBox.appendChild(typingEl);
+      scrollToBottom();
+
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userMessage })
+        });
+
+        const data = await response.json();
+        typingEl.remove();
+
+        if (data.reply) {
+          addMessage(data.reply, "bot");
+        } else {
+          addMessage("⚠️ Error: " + (data.error || "Unknown"), "bot");
+        }
+      } catch {
+        typingEl.remove();
+        addMessage("❌ Connection error", "bot");
+      }
+    }
+
+    async function resetChat() {
+      await fetch("/reset", { method: "POST" });
+      document.getElementById("chat-box").innerHTML = "";
+      addMessage("✅ Chat reset successfully", "bot");
+    }
+
+    function addMessage(text, sender) {
+      const chatBox = document.getElementById("chat-box");
+      const msg = document.createElement("div");
+      msg.className = `message ${sender}`;
+      msg.innerHTML = `<div class="bubble">${marked.parse(text)}</div>`;
+      chatBox.appendChild(msg);
+
+      // Smooth scroll to bottom after message is rendered
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+  const chatBox = document.getElementById("chat-box");
+
+  // Only auto-scroll if user is near the bottom
+  const threshold = 50; // px
+  const position = chatBox.scrollTop + chatBox.clientHeight;
+  const height = chatBox.scrollHeight;
+
+  if (height - position < threshold) {
+    // Smooth scroll only if user is already near the bottom
+    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+  }
+}
+  </script>
+</body>
+</html>
